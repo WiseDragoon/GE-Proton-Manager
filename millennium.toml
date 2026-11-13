@@ -1,0 +1,25 @@
+[plugin]
+id = "ge-proton-manager"
+name = "GE-Proton Manager"
+version = "1.0.0"
+author = "wisedragoon"
+description = "Download, update and remove GloriousEggroll's GE-Proton builds directly from Steam, including an auto-updating GE-Proton-latest."
+
+[backend]
+entry = "backend/main.lua"
+sources = ["backend/**/*.lua"]
+
+[frontend]
+entry = "frontend/index.tsx"
+
+[compiler]
+# "auto" installs the built plugin into the local Millennium plugins folder.
+output_path = "auto"
+
+[dev]
+auto_restart = true
+reload_steamui_when = "both"
+
+[logger]
+backend_prefix  = "BCK"
+frontend_prefix = "FRT"
