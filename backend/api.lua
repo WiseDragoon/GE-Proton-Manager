@@ -84,6 +84,10 @@ local function find_release(tag)
     return nil
 end
 
+local function auto_update_enabled()
+    return millennium.config.get(AUTO_UPDATE_KEY) ~= false
+end
+
 local function notify_frontend(ok, message)
     local called, err = pcall(function()
         millennium.call_frontend_method("notify", { ok, message })
@@ -112,6 +116,9 @@ local function run_next()
             logger:info(message)
         end
         job = nil
+        if current.after then
+            current.after()
+        end
         if message then
             last_result = { id = (last_result and last_result.id or 0) + 1, target = current.target, ok = ok, message = message }
             notify_frontend(ok, message)
@@ -145,33 +152,64 @@ local function enqueue(kind, target, tag, work, internal)
     return nil
 end
 
-local function install(release, as_latest)
+-- The build of release for the current architecture, as tools.install() takes it.
+local function build_of(release)
     local build = release.builds[arch]
-    if not build then
-        return release.tag .. " has no " .. arch .. " build"
-    end
-    local to_install = {
+    return build and {
         tag = release.tag,
         arch = arch,
         url = build.url,
         size = build.size,
         checksum_url = build.checksum_url,
     }
-    return enqueue("install", as_latest and tools.LATEST or release.tag, release.tag, function(current)
-        -- checked here as well as before swapping, to avoid a pointless download
-        if as_latest and tools.in_use(tools.LATEST) then
-            return false, tools.LATEST .. " is in use by a running game, close it and try again"
-        end
-        local name, replaced = tools.install(to_install, current, as_latest)
+end
+
+local function install(release)
+    local build = build_of(release)
+    if not build then
+        return release.tag .. " has no " .. arch .. " build"
+    end
+    return enqueue("install", release.tag, release.tag, function(current)
+        local name, replaced = tools.install(build, current, false)
         if not name then
             return false, replaced
         end
-        if as_latest and replaced then
+        -- Steam only picks up new tools when it starts
+        return true, name .. " installed" .. (replaced and "" or ". Restart Steam to use it")
+    end)
+end
+
+-- Installs the newest release as GE-Proton-latest. Which release and architecture is
+-- decided when the operation starts, so settings changed while it waits are followed.
+local function update_latest()
+    if not newest() then
+        return "The newest release is not known yet, refresh the list first"
+    end
+    return enqueue("install", tools.LATEST, newest().tag, function(current)
+        local release = newest()
+        local build = release and build_of(release)
+        if not build then
+            return false, "No " .. arch .. " build of GE-Proton is known"
+        end
+        current.tag = release.tag
+        -- checked here as well as before swapping, to avoid a pointless download
+        if tools.in_use(tools.LATEST) then
+            return false, tools.LATEST .. " is in use by a running game, close it and try again"
+        end
+        local name, replaced = tools.install(build, current, true)
+        if not name then
+            return false, replaced
+        end
+        -- the architecture setting changed while this build was being installed
+        current.after = function()
+            if arch ~= build.arch and auto_update_enabled() then
+                update_latest()
+            end
+        end
+        if replaced then
             return true, name .. " updated to " .. release.tag
         end
-        local message = name .. " installed" .. (as_latest and " (" .. release.tag .. ")" or "")
-        -- Steam only picks up new tools when it starts
-        return true, replaced and message or message .. ". Restart Steam to use it"
+        return true, name .. " installed (" .. release.tag .. "). Restart Steam to use it"
     end)
 end
 
@@ -185,10 +223,6 @@ local function latest_status(installed)
         end
     end
     return nil, false
-end
-
-local function auto_update_enabled()
-    return millennium.config.get(AUTO_UPDATE_KEY) ~= false
 end
 
 -- Must run inside a task. Returns the delay until the next check.
@@ -209,7 +243,7 @@ local function check_latest()
         logger:info(tools.LATEST .. " update to " .. target.tag .. " postponed")
         return RETRY_INTERVAL_MS
     end
-    if not install(target, true) then -- otherwise it is queued already
+    if not update_latest() then -- otherwise it is queued already
         logger:info("Updating " .. tools.LATEST .. " to " .. target.tag .. " (" .. arch .. ")")
     end
     return CHECK_INTERVAL_MS
@@ -392,18 +426,14 @@ function install_release(tag)
     if not release then
         return "Unknown release: " .. tostring(tag)
     end
-    return install(release, false)
+    return install(release)
 end
 
 ---@ffi
 --- Installs or updates GE-Proton-latest.
 ---@return string|nil error
 function install_latest()
-    local target = newest()
-    if not target then
-        return "The newest release is not known yet, refresh the list first"
-    end
-    return install(target, true)
+    return update_latest()
 end
 
 ---@ffi
