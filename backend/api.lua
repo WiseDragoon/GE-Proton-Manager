@@ -297,6 +297,7 @@ end
 ---@field tag string
 ---@field published_at string ISO 8601
 ---@field size number size of the build for the current architecture, 0 when there is none
+---@field verified boolean the build's SHA-512 checksum is published, so its download is checked
 ---@field prerelease boolean
 
 ---@class GeTool
@@ -347,6 +348,7 @@ local function public_release(release)
         tag = release.tag,
         published_at = release.published_at,
         size = build and build.size or 0,
+        verified = build ~= nil and build.checksum_url ~= nil,
         prerelease = release.prerelease,
     }
 end

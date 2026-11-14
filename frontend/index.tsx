@@ -232,7 +232,7 @@ function ReleasesSection({ state, refresh }: { state: GeState; refresh: () => vo
 		<Section title="Available versions">
 			<Field
 				label={state.releases_loading ? 'Loading from GitHub…' : `${releases.length} releases`}
-				description={state.releases_error ?? 'Downloads are checksum-verified.'}
+				description={state.releases_error ?? 'Downloads are checked against the checksum each release publishes.'}
 			>
 				<DialogButton style={BUTTON} disabled={state.releases_loading} onClick={() => run(() => backend.refresh_releases(true), refresh)}>
 					Refresh
@@ -242,7 +242,12 @@ function ReleasesSection({ state, refresh }: { state: GeState; refresh: () => vo
 				<Field
 					key={release.tag}
 					label={release.tag}
-					description={[formatDate(release.published_at), release.size > 0 && formatSize(release.size), release.prerelease && 'Pre-release']
+					description={[
+						formatDate(release.published_at),
+						release.size > 0 && formatSize(release.size),
+						release.size > 0 && !release.verified && 'No checksum',
+						release.prerelease && 'Pre-release',
+					]
 						.filter(Boolean)
 						.join(' · ')}
 				>

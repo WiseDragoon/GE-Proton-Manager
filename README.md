@@ -57,6 +57,9 @@ version, so the first update check replaces it.
 - An install downloads to a scratch directory inside `compatibilitytools.d`, checks the
   release's SHA-512 checksum, unpacks it and moves it into place, so Steam never sees a
   partial build. Replacing an existing build is undone if the final move fails.
+- The checksum guards against corrupt downloads, not against a compromised release, since
+  it is published alongside the archive. Releases up to 6.5-GE-1 (March 2021) publish none:
+  they install with only their size checked and are marked *No checksum* in the list.
 - GE-Proton-latest is a regular build with its name rewritten in `compatibilitytool.vdf`
   (which Steam maps games to) and in `version` (which Steam lists it under), so Steam only
   ever sees GE-Proton-latest, whichever release it contains.
