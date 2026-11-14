@@ -28,7 +28,7 @@ local releases = {
     list = {},        -- newest first
     complete = false, -- list holds every release, not just the newest ones
     fetched_at = 0,
-    loading = false,
+    fetching = 0,     -- fetches in progress: an update check can overlap a refresh
     error = nil,
     revision = 0,     -- bumped whenever what get_releases() returns changes
 }
@@ -42,11 +42,14 @@ local function newest()
     return github.latest(releases.list, arch)
 end
 
--- Must run inside a task. A partial fetch refreshes only the newest releases.
-local function load_releases(complete)
-    releases.loading = true
+-- Must run inside a task. A partial fetch refreshes only the newest releases. counted:
+-- the caller has already added this fetch to releases.fetching.
+local function load_releases(complete, counted)
+    if not counted then
+        releases.fetching = releases.fetching + 1
+    end
     local ok, list, err, is_complete = pcall(github.fetch, complete and 10 or 1, complete and 100 or 10)
-    releases.loading = false
+    releases.fetching = releases.fetching - 1
     if not ok then
         list, err = nil, tostring(list)
     end
@@ -386,7 +389,7 @@ function get_state()
         queue = waiting,
         last_result = last_result,
         releases_revision = releases.revision,
-        releases_loading = releases.loading,
+        releases_loading = releases.fetching > 0,
         releases_error = releases.error,
         restart_required = tools.restart_required(all),
     }
@@ -407,14 +410,15 @@ end
 ---@param force boolean
 ---@return boolean started
 function refresh_releases(force)
-    if releases.loading then
+    if releases.fetching > 0 then
         return false
     end
     if not force and releases.complete and os.time() - releases.fetched_at < RELEASES_TTL_S then
         return false
     end
-    releases.loading = true
-    async.spawn("refresh releases", load_releases, true)
+    -- counted now, so get_state() reports it before the task starts
+    releases.fetching = releases.fetching + 1
+    async.spawn("refresh releases", load_releases, true, true)
     return true
 end
 
