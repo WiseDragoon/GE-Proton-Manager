@@ -93,7 +93,8 @@ local function notify_frontend(ok, message)
     end
 end
 
--- Starts the oldest queued operation, unless one is running. Each outcome is shown as a toast.
+-- Starts the oldest queued operation, unless one is running. Each outcome with a message
+-- is shown as a toast.
 local function run_next()
     if job or #queue == 0 then
         return
@@ -105,14 +106,16 @@ local function run_next()
         if not called then
             ok, message = false, "Internal error: " .. tostring(ok)
         end
-        if ok then
-            logger:info(message)
-        else
+        if not ok then
             logger:error(current.target .. ": " .. tostring(message))
+        elseif message then
+            logger:info(message)
         end
-        last_result = { id = (last_result and last_result.id or 0) + 1, target = current.target, ok = ok, message = message }
         job = nil
-        notify_frontend(ok, message)
+        if message then
+            last_result = { id = (last_result and last_result.id or 0) + 1, target = current.target, ok = ok, message = message }
+            notify_frontend(ok, message)
+        end
         run_next()
     end)
 end
@@ -130,12 +133,14 @@ local function pending(kind, target)
 end
 
 --- Queues work(operation); operations run one at a time, in the order they were queued.
+--- work returns ok and a message to show, or no message to finish silently.
+---@param internal? boolean housekeeping the frontend does not show
 ---@return string|nil error why it was not queued
-local function enqueue(kind, target, tag, work)
+local function enqueue(kind, target, tag, work, internal)
     if pending(kind, target) then
         return target .. " is already " .. (kind == "remove" and "being removed" or "being installed")
     end
-    queue[#queue + 1] = { kind = kind, target = target, tag = tag, work = work, stage = "pending", downloaded = 0, total = 0, cancel = false }
+    queue[#queue + 1] = { kind = kind, target = target, tag = tag, work = work, internal = internal, stage = "pending", downloaded = 0, total = 0, cancel = false }
     run_next()
     return nil
 end
@@ -240,7 +245,11 @@ function M.start()
         async.spawn("update check", check_latest) -- GE-Proton-latest follows it
     end)
     logger:info("Managing " .. arch .. " GE-Proton builds in " .. tools.compat_dir())
-    async.spawn("cleanup", tools.clean_work_dir)
+    -- queued, so no install or removal can start while it deletes the scratch directory
+    enqueue("cleanup", "", nil, function()
+        tools.clean_work_dir()
+        return true
+    end, true)
     async.spawn("auto update", auto_update_loop)
 end
 
@@ -317,8 +326,10 @@ function get_state()
     local latest_tool, outdated = latest_status(all)
     local target = newest()
     local waiting = {}
-    for i, operation in ipairs(queue) do
-        waiting[i] = { kind = operation.kind, target = operation.target, tag = operation.tag }
+    for _, operation in ipairs(queue) do
+        if not operation.internal then
+            waiting[#waiting + 1] = { kind = operation.kind, target = operation.target, tag = operation.tag }
+        end
     end
     return {
         compat_dir = tools.compat_dir(),
@@ -329,7 +340,7 @@ function get_state()
         latest_installed = latest_tool and (latest_tool.tag or "") or nil,
         latest_update_available = outdated,
         installed = installed,
-        job = job and {
+        job = job and not job.internal and {
             kind = job.kind,
             target = job.target,
             tag = job.tag,
