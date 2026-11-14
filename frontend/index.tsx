@@ -52,10 +52,15 @@ export function notify(ok: boolean, message: string): void {
 	toaster.toast({ title: ok ? TITLE : `${TITLE}: failed`, body: message });
 }
 
-async function run(action: Promise<string | null | undefined>, refresh: () => void) {
-	const error = await action;
-	if (error) notify(false, error);
-	refresh();
+/** Calls the backend for a click: shows the error it returns, or why the call failed, then refreshes. */
+async function run(action: () => Promise<unknown>, refresh?: () => void) {
+	try {
+		const error = await action();
+		if (typeof error === 'string' && error) notify(false, error);
+	} catch (failure) {
+		notify(false, `The backend did not respond: ${failure instanceof Error ? failure.message : String(failure)}`);
+	}
+	refresh?.();
 }
 
 /** Polls the backend, faster while something is in progress. */
@@ -104,7 +109,7 @@ function RemoveButton({ state, name, refresh, style }: { state: GeState; name: s
 		return () => window.clearTimeout(timer);
 	}, [armed]);
 	const onClick = () => {
-		if (armed) run(backend.remove_tool(name), refresh);
+		if (armed) run(() => backend.remove_tool(name), refresh);
 		setArmed(!armed);
 	};
 	return (
@@ -132,7 +137,7 @@ function JobProgress({ job }: { job: GeJob }) {
 					<ProgressBar nProgress={downloading && job.total > 0 ? (job.downloaded / job.total) * 100 : 0} indeterminate={!downloading} />
 				</div>
 				{job.kind === 'install' && (
-					<DialogButton style={BUTTON} onClick={() => backend.cancel(job.target)}>
+					<DialogButton style={BUTTON} onClick={() => run(() => backend.cancel(job.target))}>
 						Cancel
 					</DialogButton>
 				)}
@@ -164,7 +169,7 @@ function LatestSection({ state, refresh }: { state: GeState; refresh: () => void
 				childrenContainerWidth="max"
 			>
 				<Actions>
-					<DialogButton disabled={!!installing || !newest || (installed !== undefined && !updatable)} onClick={() => run(backend.install_latest(), refresh)}>
+					<DialogButton disabled={!!installing || !newest || (installed !== undefined && !updatable)} onClick={() => run(() => backend.install_latest(), refresh)}>
 						{installing === 'running' ? 'Installing…' : installing === 'queued' ? 'Queued' : installed === undefined ? 'Install' : updatable ? 'Update' : 'Up to date'}
 					</DialogButton>
 					{installed !== undefined && <RemoveButton state={state} name={state.latest_name} refresh={refresh} />}
@@ -196,10 +201,15 @@ function ReleasesSection({ state, refresh }: { state: GeState; refresh: () => vo
 	const [showAll, setShowAll] = useState(false);
 
 	useEffect(() => {
-		backend.refresh_releases(false).then(refresh);
+		run(() => backend.refresh_releases(false), refresh);
 	}, []);
 	useEffect(() => {
-		if (state.releases_revision > 0) backend.get_releases().then((list) => setReleases(asList(list)));
+		// on failure the list stays as it is: polling shows the backend error, and the next revision retries
+		if (state.releases_revision > 0)
+			backend
+				.get_releases()
+				.then((list) => setReleases(asList(list)))
+				.catch(() => undefined);
 	}, [state.releases_revision]);
 
 	const installedTags = new Set(
@@ -224,7 +234,7 @@ function ReleasesSection({ state, refresh }: { state: GeState; refresh: () => vo
 				label={state.releases_loading ? 'Loading from GitHub…' : `${releases.length} releases`}
 				description={state.releases_error ?? 'Downloads are checksum-verified.'}
 			>
-				<DialogButton style={BUTTON} disabled={state.releases_loading} onClick={() => backend.refresh_releases(true).then(refresh)}>
+				<DialogButton style={BUTTON} disabled={state.releases_loading} onClick={() => run(() => backend.refresh_releases(true), refresh)}>
 					Refresh
 				</DialogButton>
 			</Field>
@@ -239,7 +249,7 @@ function ReleasesSection({ state, refresh }: { state: GeState; refresh: () => vo
 					<DialogButton
 						style={BUTTON}
 						disabled={buttonLabel(release) !== 'Install'}
-						onClick={() => run(backend.install_release(release.tag), refresh)}
+						onClick={() => run(() => backend.install_release(release.tag), refresh)}
 					>
 						{buttonLabel(release)}
 					</DialogButton>
@@ -319,7 +329,7 @@ function StatusBar({ state }: { state: GeState }) {
 			{state.job && <JobProgress job={state.job} />}
 			{queue.map((operation) => (
 				<Field key={operation.kind + operation.target} label={operation.target} description={operation.kind === 'remove' ? 'Queued for removal' : 'Queued'}>
-					<DialogButton style={BUTTON} onClick={() => backend.cancel(operation.target)}>
+					<DialogButton style={BUTTON} onClick={() => run(() => backend.cancel(operation.target))}>
 						Cancel
 					</DialogButton>
 				</Field>
