@@ -193,7 +193,8 @@ end
 
 -- Must run inside a task. Returns the delay until the next check.
 local function check_latest()
-    if not auto_update_enabled() or not tools.find(tools.LATEST) then
+    -- a queued removal would otherwise be undone by the update queued behind it
+    if not auto_update_enabled() or not tools.find(tools.LATEST) or pending("remove", tools.LATEST) then
         return CHECK_INTERVAL_MS
     end
     local target = load_releases(false)
