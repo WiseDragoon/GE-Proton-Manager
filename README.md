@@ -27,6 +27,18 @@ bun run build
 Steam is running, enables and restarts it through Millennium's developer socket.
 `bun run dev` does the same on every source change.
 
+## Testing
+
+```bash
+bun run test
+```
+
+`tests/e2e.ts` runs the backend in Millennium's own Lua VM (so Millennium must be installed)
+against a temporary fake Steam folder and fake releases served from local files: installs,
+checksums, GE-Proton-latest, the queue, cancelling, in-use protection, architecture changes
+and restart detection. `RUNTIME=1 bun run test` runs it inside Steam's runtime container, as
+Millennium does; `VERBOSE=1` shows the backend's log.
+
 ## Using it
 
 Open Millennium's settings and select **GE-Proton Manager**.

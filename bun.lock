@@ -4,6 +4,7 @@
   "workspaces": {
     "": {
       "devDependencies": {
+        "@msgpack/msgpack": "3.1.2",
         "@steambrew/starlight": "^1.1.3",
         "@types/react": "19.1.1",
         "@types/react-dom": "19.1.1",
@@ -11,6 +12,8 @@
     },
   },
   "packages": {
+    "@msgpack/msgpack": ["@msgpack/msgpack@3.1.2", "", {}, "sha512-JEW4DEtBzfe8HvUYecLU9e6+XJnKDlUAIve8FvPzF3Kzs6Xo/KuZkZJsDH0wJXl/qEZbeeE7edxDNY3kMs39hQ=="],
+
     "@steambrew/starlight": ["@steambrew/starlight@1.1.7", "", { "bin": { "starlight": "bin/starlight.js" } }, "sha512-NSrjOcRPze977ALI3eYuDPXrfjEYDC51Q0NJYN+QkHPAsj8IzvkVItwO73/4mhWVuwOslkzfwoiuJBuunTjn3w=="],
 
     "@types/react": ["@types/react@19.1.1", "", { "dependencies": { "csstype": "^3.0.2" } }, "sha512-ePapxDL7qrgqSF67s0h9m412d9DbXyC1n59O2st+9rjuuamWsZuD2w55rqY12CbzsZ7uVXb5Nw0gEp9Z8MMutQ=="],

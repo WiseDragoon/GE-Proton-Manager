@@ -28,5 +28,9 @@
   "include": [
     "**/*",
     ".millennium/**/*.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "tests"
   ]
 }
