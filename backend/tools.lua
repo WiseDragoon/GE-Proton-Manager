@@ -228,6 +228,16 @@ function M.in_use(name)
     return false
 end
 
+-- The start of a command's output, short enough for a notification: a damaged archive can
+-- make tar print an error for each of thousands of files.
+local function brief(output)
+    output = output:gsub("^%s+", ""):gsub("%s+$", "")
+    if #output > 300 then
+        return output:sub(1, 300) .. "..."
+    end
+    return output
+end
+
 local function remove_tree(path)
     async.run("rm -rf " .. async.quote(path))
 end
@@ -354,7 +364,7 @@ function M.install(release, job, as_latest)
     -- unlinking a ~500 MB file here would block the plugin for a noticeable time
     local code, output = async.run("tar -xf " .. async.quote(archive) .. " -C " .. async.quote(unpacked))
     if code ~= 0 then
-        return fail("Extraction failed: " .. output)
+        return fail("Extraction failed: " .. brief(output))
     end
     local entries = fs.list(unpacked) or {}
     local root = entries[1]
